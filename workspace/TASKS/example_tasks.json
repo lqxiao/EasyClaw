@@ -1,0 +1,161 @@
+{
+  "tasks": [
+    {
+      "id": "cancel-xfinity-internet",
+      "title": "Cancel Xfinity internet",
+      "status": "Waiting on me",
+      "priority": "Medium",
+      "owner": "Agent",
+      "goal": "Cancel home internet service before April 5 without accepting an overpriced retention offer.",
+      "deadline": "Apr 5",
+      "last_update": "Mar 27, 10:16 AM",
+      "next_action": "Approve or reject the $45/month retention offer so the agent can finish the cancellation flow.",
+      "current_step": "Waiting for user approval",
+      "why": "The retention offer exceeds the allowed $30/month threshold, so policy requires confirmation before proceeding.",
+      "risk_level": "Low",
+      "approvals": [
+        {
+          "id": "approval-xfinity-retention",
+          "title": "Reject $45/month retention offer and continue cancellation",
+          "reason": "The offer is above the current maximum allowed monthly threshold of $30.",
+          "status": "pending"
+        }
+      ],
+      "constraints": {
+        "deadline": "Apr 5",
+        "preferred_channel": "online chat",
+        "max_retention_offer": 30,
+        "can_finalize_without_approval": false
+      },
+      "timeline": [
+        {
+          "time": "Mar 27, 10:16 AM",
+          "summary": "Waiting for approval",
+          "details": "Cancellation flow is ready, but the agent is paused because a retention offer needs your decision."
+        },
+        {
+          "time": "Mar 27, 10:15 AM",
+          "summary": "Found cancellation path and retention offer",
+          "details": "The provider portal exposed a $45/month offer before the final cancellation step."
+        },
+        {
+          "time": "Mar 27, 10:12 AM",
+          "summary": "Task created",
+          "details": "Goal set to cancel service before the next billing cycle closes."
+        }
+      ],
+      "artifacts": [
+        {
+          "name": "xfinity-retention-offer.png",
+          "summary": "Screenshot of the portal offer shown immediately before the cancellation confirmation step."
+        },
+        {
+          "name": "cancellation-policy-summary.md",
+          "summary": "Short summary of fees, effective date, and final bill behavior."
+        }
+      ],
+      "chat": [
+        {
+          "role": "assistant",
+          "content": "I found the cancellation path and a $45/month retention offer. I paused because your policy says offers above $30 need approval."
+        },
+        {
+          "role": "user",
+          "content": "Do not accept anything above $30."
+        }
+      ]
+    },
+    {
+      "id": "fight-insurance-denial",
+      "title": "Fight insurance denial",
+      "status": "Waiting on others",
+      "priority": "High",
+      "owner": "Agent",
+      "goal": "Prepare an appeal packet and monitor the insurer portal for status changes.",
+      "deadline": "Apr 2",
+      "last_update": "Mar 26, 4:10 PM",
+      "next_action": "Recheck the insurer portal tomorrow morning and upload the physician letter once received.",
+      "current_step": "Waiting on external party",
+      "why": "The physician letter has been requested but has not been uploaded yet.",
+      "risk_level": "Medium",
+      "approvals": [],
+      "constraints": {
+        "preferred_channel": "portal upload",
+        "escalation_allowed": true,
+        "can_submit_without_approval": true
+      },
+      "timeline": [
+        {
+          "time": "Mar 26, 4:10 PM",
+          "summary": "Portal recheck completed",
+          "details": "Denial status is unchanged. Appeal draft remains ready."
+        },
+        {
+          "time": "Mar 26, 3:45 PM",
+          "summary": "Requested physician letter",
+          "details": "Sent a follow-up request to obtain supporting documentation for the appeal."
+        }
+      ],
+      "artifacts": [
+        {
+          "name": "appeal_draft.pdf",
+          "summary": "Current appeal letter draft with denial reasons and supporting facts."
+        },
+        {
+          "name": "denial_notice.pdf",
+          "summary": "Original denial notice from the insurer."
+        }
+      ],
+      "chat": [
+        {
+          "role": "assistant",
+          "content": "The appeal draft is ready. I am waiting for the physician letter before submitting."
+        }
+      ]
+    },
+    {
+      "id": "find-seattle-flight",
+      "title": "Find Seattle flight under $300",
+      "status": "Done",
+      "priority": "Medium",
+      "owner": "Agent",
+      "goal": "Find 3 strong flight options with aisle seating and acceptable refund terms.",
+      "deadline": "Apr 2",
+      "last_update": "Mar 25, 9:05 AM",
+      "next_action": "No further action required unless the user wants to compare another date range.",
+      "current_step": "Completed",
+      "why": "Three options under budget were identified and ranked.",
+      "risk_level": "Low",
+      "approvals": [],
+      "constraints": {
+        "max_price": 300,
+        "seat_preference": "aisle",
+        "can_book_automatically": false
+      },
+      "timeline": [
+        {
+          "time": "Mar 25, 9:05 AM",
+          "summary": "Task completed",
+          "details": "Best option is Alaska at $289 with acceptable refund policy and aisle seating available."
+        },
+        {
+          "time": "Mar 25, 9:03 AM",
+          "summary": "Filtered options under budget",
+          "details": "Removed flights above $300 and low-value overnight itineraries."
+        }
+      ],
+      "artifacts": [
+        {
+          "name": "flight_comparison.png",
+          "summary": "Side-by-side fare and timing comparison for the top 3 options."
+        }
+      ],
+      "chat": [
+        {
+          "role": "assistant",
+          "content": "I found 3 good options under budget. Alaska at $289 is the best fit."
+        }
+      ]
+    }
+  ]
+}

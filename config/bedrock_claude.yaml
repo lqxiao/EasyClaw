@@ -1,0 +1,9 @@
+bedrock:
+  region_name: us-east-1
+  model_id: us.anthropic.claude-opus-4-6-v1  # us.anthropic.claude-3-7-sonnet-20250219-v1:0 # us.anthropic.claude-3-7-sonnet-20250219-v1:0 qwen.qwen3-vl-235b-a22b; claude 4 cannot be called
+  anthropic_version: bedrock-2023-05-31
+  max_tokens: 128000
+  temperature: 0.5
+  timeout: 600
+agent: 
+  max_tool_rounds: 1000

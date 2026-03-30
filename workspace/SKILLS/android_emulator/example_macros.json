@@ -1,0 +1,33 @@
+{
+    "open_settings_and_screenshot": [
+        {"action": "home"},
+        {"action": "wait", "seconds": 1},
+        {"action": "key", "code": "KEYCODE_MENU"},
+        {"action": "wait", "seconds": 0.5},
+        {"action": "tap_element", "text": "Settings"},
+        {"action": "wait", "seconds": 2},
+        {"action": "screenshot", "path": "settings.png"},
+        {"action": "back"},
+        {"action": "home"}
+    ],
+    "scroll_and_capture": [
+        {"action": "screenshot", "path": "page_1.png"},
+        {"action": "swipe_up", "distance": 800},
+        {"action": "wait", "seconds": 0.5},
+        {"action": "screenshot", "path": "page_2.png"},
+        {"action": "swipe_up", "distance": 800},
+        {"action": "wait", "seconds": 0.5},
+        {"action": "screenshot", "path": "page_3.png"}
+    ],
+    "open_url_in_browser": [
+        {"action": "home"},
+        {"action": "launch", "package": "com.android.chrome"},
+        {"action": "wait", "seconds": 3},
+        {"action": "tap", "x": 540, "y": 150},
+        {"action": "wait", "seconds": 0.5},
+        {"action": "type", "text": "https://example.com"},
+        {"action": "key", "code": "ENTER"},
+        {"action": "wait", "seconds": 3},
+        {"action": "screenshot", "path": "browser_result.png"}
+    ]
+}
