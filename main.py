@@ -120,7 +120,13 @@ def _open_workspace():
 if __name__ == "__main__":
     session_id = str(uuid.uuid4())
     user_id = "admin"
-    memory_path = "s3://shopqa-users/liqiangx/tmp/memory_database"
+    s3_memory_path = "path/to/your/s3"
+    tool_choices = [
+        "exec",
+        "memory_profile",
+        "memory_history_retrieve",
+        "fetch_image",
+    ]
 
     llm = BedrockAPI.from_yaml()
     cfg = {}
@@ -131,7 +137,7 @@ if __name__ == "__main__":
         cfg = {}
     agent_cfg = cfg.get("agent", {}) if isinstance(cfg, dict) else {}
     max_tool_rounds = int(agent_cfg.get("max_tool_rounds", 20))
-    memory = RagMemoryStore(s3_path=memory_path, force_sync=True)
+    memory = RagMemoryStore(s3_path=s3_memory_path, force_sync=True)
     agent = AutoAgent(
         llm=llm,
         memory=memory, 
@@ -143,6 +149,15 @@ if __name__ == "__main__":
         workspace_root = os.path.join(os.getcwd(), "workspace")
         with gr.Tabs():
             with gr.Tab("Chat", elem_id="chat-tab", scale=1):
+                with gr.Sidebar(open=True):
+                    gr.Markdown(
+                        "## Tools\nChoose which tools the agent can use in this chat."
+                    )
+                    enabled_tools = gr.CheckboxGroup(
+                        choices=tool_choices,
+                        value=tool_choices,
+                        label="Enabled tools",
+                    )
                 with gr.Column(elem_id="chat-shell", scale=1, min_width=0):
                     with gr.Column(elem_id="chat-main", scale=1, min_width=0):
                         chatbot = gr.Chatbot(
@@ -176,6 +191,7 @@ if __name__ == "__main__":
                                 sources=["clipboard", "upload"],
                             )
                             send = gr.Button("Send", variant="primary", elem_id="send-button")
+                            stop = gr.Button("Stop", variant="stop", visible=False)
             with gr.Tab("Workspace", scale=1):
                 gr.Markdown("## Workspace")
                 workspace_explorer = gr.FileExplorer(
@@ -241,7 +257,7 @@ if __name__ == "__main__":
                 user_image,
             )
 
-        def _gradio_handler(user_text, user_image, claude_messages):
+        def _gradio_handler(user_text, user_image, claude_messages, enabled_tool_names):
             if not (user_text and user_text.strip()) and user_image is None:
                 yield (
                     agent.to_gradio_messages(claude_messages),
@@ -258,6 +274,7 @@ if __name__ == "__main__":
                     user_image=user_image,
                     history=claude_messages,
                     append_user=False,
+                    enabled_tools=enabled_tool_names or [],
                 ):
                     yield (
                         agent.to_gradio_messages(current_history),
@@ -273,6 +290,7 @@ if __name__ == "__main__":
                     user_image=user_image,
                     history=claude_messages,
                     append_user=False,
+                    enabled_tools=enabled_tool_names or [],
                 )
                 yield (
                     agent.to_gradio_messages(claude_messages),
@@ -283,24 +301,70 @@ if __name__ == "__main__":
                     None,
                 )
 
-        send.click(
+        def _show_stop_button():
+            return (
+                gr.update(visible=False),
+                gr.update(visible=True),
+            )
+
+        def _show_send_button():
+            return (
+                gr.update(visible=True),
+                gr.update(visible=False),
+            )
+
+        send_preview_event = send.click(
             _preview_user_message,
-                [msg, image_input, claude_state],
-                [chatbot, claude_state, msg, pending_text, pending_image],
-        ).then(
+            [msg, image_input, claude_state],
+            [chatbot, claude_state, msg, pending_text, pending_image],
+        )
+        send_toggle_event = send_preview_event.then(
+            _show_stop_button,
+            None,
+            [send, stop],
+            queue=False,
+        )
+        send_response_event = send_toggle_event.then(
             _gradio_handler,
-            [pending_text, pending_image, claude_state],
+            [pending_text, pending_image, claude_state, enabled_tools],
             [chatbot, claude_state, msg, image_input, pending_text, pending_image],
         )
-        
-        msg.submit(
+        send_response_event.then(
+            _show_send_button,
+            None,
+            [send, stop],
+            queue=False,
+        )
+
+        submit_preview_event = msg.submit(
             _preview_user_message,
-                [msg, image_input, claude_state],
-                [chatbot, claude_state, msg, pending_text, pending_image],
-        ).then(
+            [msg, image_input, claude_state],
+            [chatbot, claude_state, msg, pending_text, pending_image],
+        )
+        submit_toggle_event = submit_preview_event.then(
+            _show_stop_button,
+            None,
+            [send, stop],
+            queue=False,
+        )
+        submit_response_event = submit_toggle_event.then(
             _gradio_handler,
-            [pending_text, pending_image, claude_state],
+            [pending_text, pending_image, claude_state, enabled_tools],
             [chatbot, claude_state, msg, image_input, pending_text, pending_image],
+        )
+        submit_response_event.then(
+            _show_send_button,
+            None,
+            [send, stop],
+            queue=False,
+        )
+
+        stop.click(
+            _show_send_button,
+            None,
+            [send, stop],
+            cancels=[send_response_event, submit_response_event],
+            queue=False,
         )
 
     demo.queue()

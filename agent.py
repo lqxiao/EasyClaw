@@ -34,6 +34,34 @@ class AutoAgent:
             "red": "\x1b[31m",
         }
 
+    def _build_tool_runners(
+        self,
+        enabled_tools: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        runners: Dict[str, Any] = {
+            "exec": ExecTool(),
+            "memory_profile": MemoryProfileTool(store=self.memory),
+            "memory_history_retrieve": MemoryHistoryRetrieveTool(store=self.memory),
+            "fetch_image": ImageBase64Tool(),
+        }
+        if enabled_tools is None:
+            return runners
+        allowed = set(enabled_tools)
+        return {name: runner for name, runner in runners.items() if name in allowed}
+
+    def _build_tool_schemas(
+        self,
+        enabled_tools: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        if not hasattr(self.llm, "_default_tools"):
+            return []
+        tool_schemas = self.llm._default_tools()
+        allowed = set(self._build_tool_runners(enabled_tools).keys())
+        return [
+            tool for tool in tool_schemas
+            if isinstance(tool, dict) and tool.get("name") in allowed
+        ]
+
     def _extract_text(self, response: Dict[str, Any]) -> str:
         if "content" in response:
             return "".join(
@@ -102,11 +130,13 @@ class AutoAgent:
         temperature: float = 0.7,
         max_tool_rounds: int = 20,
         tools_enabled: bool = True,
+        enabled_tools: Optional[List[str]] = None,
     ) -> Tuple[List[Dict[str, Any]], str]:
+        tool_schemas = self._build_tool_schemas(enabled_tools) if tools_enabled else []
         response = self.llm.send_messages(
             messages,
             temperature=temperature,
-            tools=None if tools_enabled else [],
+            tools=tool_schemas,
         )
 
         tool_rounds = 0
@@ -131,13 +161,9 @@ class AutoAgent:
 
             tool_results: List[Dict[str, Any]] = []
             tool_registry = ToolRegistry(
-                {
-                    "exec": ExecTool(),
-                    "memory_profile": MemoryProfileTool(store=self.memory),
-                    "memory_history_retrieve": MemoryHistoryRetrieveTool(store=self.memory),
-                    # "form_schema": FormSchemaTool(),
-                    "fetch_image": ImageBase64Tool(),
-                }
+                self._build_tool_runners(enabled_tools),
+                user_id=self.user_id,
+                session_id=self.session_id,
             )
             for tool_use in tool_uses:
                 tool_name = tool_use.get("name")
@@ -165,7 +191,7 @@ class AutoAgent:
             response = self.llm.send_messages(
                 messages,
                 temperature=temperature,
-                tools=None if tools_enabled else [],
+                tools=tool_schemas,
             )
             tool_rounds += 1
 
@@ -177,8 +203,10 @@ class AutoAgent:
         temperature: float = 0.7,
         max_tool_rounds: int = 20,
         tools_enabled: bool = True,
+        enabled_tools: Optional[List[str]] = None,
     ) -> Iterator[Tuple[List[Dict[str, Any]], str]]:
         tool_rounds = 0
+        tool_schemas = self._build_tool_schemas(enabled_tools) if tools_enabled else []
 
         while tool_rounds < max_tool_rounds:
             final_response: Optional[Dict[str, Any]] = None
@@ -188,7 +216,7 @@ class AutoAgent:
             for response in self.llm.send_messages_stream(
                 messages,
                 temperature=temperature,
-                tools=None if tools_enabled else [],
+                tools=tool_schemas,
             ):
                 final_response = response
                 content = response.get("content", [])
@@ -228,12 +256,9 @@ class AutoAgent:
 
             tool_results: List[Dict[str, Any]] = []
             tool_registry = ToolRegistry(
-                {
-                    "exec": ExecTool(),
-                    "memory_profile": MemoryProfileTool(store=self.memory),
-                    "memory_history_retrieve": MemoryHistoryRetrieveTool(store=self.memory),
-                    "image_base64": ImageBase64Tool(),
-                }
+                self._build_tool_runners(enabled_tools),
+                user_id=self.user_id,
+                session_id=self.session_id,
             )
             for tool_use in tool_uses:
                 tool_name = tool_use.get("name")
@@ -313,6 +338,7 @@ class AutoAgent:
         user_image: Image.Image,
         append_user: bool = True,
         temperature: float = 0.7,
+        enabled_tools: Optional[List[str]] = None,
     ) -> Tuple[List[Dict[str, Any]], str]:
         if not user_text.strip():
             return history, ""
@@ -326,6 +352,7 @@ class AutoAgent:
             temperature=temperature,
             max_tool_rounds=self.max_tool_rounds,
             tools_enabled=True,
+            enabled_tools=enabled_tools,
         )
         return history, ""
 
@@ -336,6 +363,7 @@ class AutoAgent:
         user_image: Image.Image,
         append_user: bool = True,
         temperature: float = 0.7,
+        enabled_tools: Optional[List[str]] = None,
     ) -> Iterator[Tuple[List[Dict[str, Any]], str]]:
         if not user_text.strip():
             yield history, ""
@@ -351,6 +379,7 @@ class AutoAgent:
             temperature=temperature,
             max_tool_rounds=self.max_tool_rounds,
             tools_enabled=True,
+            enabled_tools=enabled_tools,
         ):
             yield current_history, assistant_text
 
