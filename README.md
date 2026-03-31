@@ -4,12 +4,31 @@ EasyClaw is a more user-friendly open-source agent system inspired by OpenClaw, 
 
 It launches a local Gradio web UI where you can chat with the agent, browse the `workspace/` folder, and inspect enabled skills.
 
+## Supported LLM Providers
+
+EasyClaw supports three providers out of the box. Pick the one you have access to:
+
+| Provider | Config file | Env var needed |
+|----------|-------------|----------------|
+| Amazon Bedrock (default) | `config/bedrock_claude.yaml` | AWS credentials |
+| Anthropic direct API | `config/anthropic_claude.yaml` | `ANTHROPIC_API_KEY` |
+| OpenAI | `config/openai.yaml` | `OPENAI_API_KEY` |
+
+Select a provider by setting `LLM_PROVIDER` before running:
+
+```bash
+LLM_PROVIDER=anthropic python main.py   # Anthropic direct
+LLM_PROVIDER=openai python main.py      # OpenAI
+python main.py                          # defaults to Bedrock
+```
+
+Each config file lets you set `model_id`, `max_tokens`, `temperature`, and `agent.max_tool_rounds`.
+
 ## Requirements
 
 - Python 3.10 or newer
-- AWS credentials configured locally
-- Access to Amazon Bedrock for the model in [`config/bedrock_claude.yaml`]
-- [Optional] Access to the S3 bucket/path used by the memory store in [`main.py`]
+- Credentials for your chosen provider (see table above)
+- [Optional] Access to an S3 bucket for cloud-backed memory storage — defaults to local at `~/.cache/cute_ai/memory/`
 
 ## Install
 
@@ -19,41 +38,57 @@ It launches a local Gradio web UI where you can chat with the agent, browse the 
 cd /Path/to/EasyClaw
 ```
 
-2. Create and activate a virtual environment:
+2. Install `uv` (recommended — pip's resolver cannot handle this project's dependency graph):
 
 ```bash
-python3 -m venv .venv
+pip install uv
+```
+
+3. Create and activate a virtual environment:
+
+```bash
+uv venv .venv
 source .venv/bin/activate
 ```
 
-3. Install dependencies:
+4. Install pinned dependencies:
 
 ```bash
-pip install -r requirements.txt
+uv pip sync requirements.lock
 ```
 
-4. [To be expaneded to other sources] Make sure AWS credentials are available in your shell. For example, you can use:
+5. Set credentials for your chosen provider:
 
+**Bedrock:**
 ```bash
 aws configure
-```
-
-or export credentials manually before launching the app:
-
-```bash
+# or
 export AWS_ACCESS_KEY_ID=your_key
 export AWS_SECRET_ACCESS_KEY=your_secret
 export AWS_DEFAULT_REGION=us-east-1
 ```
 
+**Anthropic:**
+```bash
+export ANTHROPIC_API_KEY=your_key
+```
+
+**OpenAI:**
+```bash
+export OPENAI_API_KEY=your_key
+```
+
 ## Configure
 
-- Bedrock model settings live in [`config/bedrock_claude.yaml`] 
-- The main app currently uses an S3-backed memory database path defined in [`main.py`]. If you want to use a different bucket or switch to local storage, update that file before starting the app.
+Each provider has its own config file under `config/`:
+
+- `config/bedrock_claude.yaml` — Bedrock region, model ID, timeouts
+- `config/anthropic_claude.yaml` — Anthropic model ID, max tokens
+- `config/openai.yaml` — OpenAI model ID, max tokens, and model-specific flags (e.g. `disable_temperature: true` for models that don't support it)
+
+Memory storage defaults to local (`~/.cache/cute_ai/memory/memory.db`). To use S3, set `s3_memory_path` in `main.py` to your S3 path (e.g. `s3://my-bucket/memory`) — the agent will sync to S3 on exit.
 
 ## Open The App
-
-Start the main UI with:
 
 ```bash
 python main.py
@@ -70,9 +105,28 @@ http://127.0.0.1:7860
 - `Chat` tab for talking to the agent
 - `Workspace` tab for browsing files under `workspace/`
 - `Skills` tab for previewing skill files
+- `Tasks` tab for viewing and managing agent tasks
+
+## Adding a New Provider
+
+1. Create a subclass of `LLMBase` in `apis.py`
+2. Implement `send_messages` and `send_messages_stream` — use `self._prepare()`, `self._split_system()`, and `self._api_call()` from the base class
+3. Add a `from_yaml()` static method and a config file under `config/`
+4. Register it in the `_provider_map` in `main.py`
+
+## Updating Dependencies
+
+`requirements.txt` contains direct dependencies with loose version bounds. `requirements.lock` is the fully pinned lockfile used for installs.
+
+To add or upgrade a dependency, edit `requirements.txt` then regenerate the lockfile:
+
+```bash
+uv pip compile requirements.txt -o requirements.lock
+uv pip sync requirements.lock
+```
 
 ## Troubleshooting
 
-- If `pip install` fails, confirm the virtual environment is activated and that you are using a recent Python version.
-- If the app fails on startup with AWS errors, verify your Bedrock access, AWS region, and S3 permissions.
+- Use `uv pip sync requirements.lock` instead of `pip install` — plain pip cannot resolve this project's dependencies.
+- If the app fails on startup with credential errors, verify your provider's API key or AWS region.
 - If the browser page does not open, copy the Gradio URL from the terminal and paste it into your browser manually.

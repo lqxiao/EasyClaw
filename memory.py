@@ -116,6 +116,8 @@ class S3DatabasePath:
         self._sync_back()
     
     def _sync_back(self):
+        if not self.on_s3:
+            return
         if os.path.exists(self._local_db):
             target = (
                 f"{self.s3_path}/{self.db_filename}"
@@ -342,9 +344,6 @@ class RagMemoryStore:
         fuzzy: bool = True,
     ) -> List[Dict[str, Any]]:
         if not query:
-            return []
-
-        if len(self.memories) == 0:
             return []
 
         connection = sqlite3.connect(self.db_path)
