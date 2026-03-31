@@ -19,14 +19,41 @@ TASK_UI_CSS = """
   gap: 16px;
 }
 #task-sidebar,
-#task-main,
-#task-right {
+#task-main {
   min-height: 0;
 }
 #task-sidebar .gradio-markdown,
-#task-main .gradio-markdown,
-#task-right .gradio-markdown {
+#task-main .gradio-markdown {
   margin-bottom: 0;
+}
+#task-selector {
+  gap: 10px;
+}
+#task-selector label {
+  display: block;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+#task-selector label:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+#task-selector label:has(input:checked) {
+  border-color: #0f766e;
+  background: #f0fdfa;
+  box-shadow: 0 14px 30px rgba(15, 118, 110, 0.14);
+}
+#task-selector label span {
+  white-space: pre-line;
+  line-height: 1.45;
+}
+#task-selector input {
+  margin-top: 3px;
 }
 .task-card {
   border: 1px solid #e5e7eb;
@@ -139,6 +166,30 @@ TASK_UI_CSS = """
   padding: 12px;
   background: #fff;
 }
+.task-panel-stack {
+  display: grid;
+  gap: 12px;
+}
+.task-progress-shell {
+  margin-top: 14px;
+  border-radius: 999px;
+  height: 12px;
+  background: #ece7dc;
+  overflow: hidden;
+}
+.task-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #0f766e 0%, #14b8a6 100%);
+  border-radius: 999px;
+}
+.task-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #4b5563;
+}
 .task-list-item-title {
   font-weight: 700;
   color: #111827;
@@ -177,6 +228,29 @@ def _status_badge(status: str) -> str:
     return f'<span class="task-badge task-badge-{slug}">{_escape(status)}</span>'
 
 
+def _status_progress(status: str) -> int:
+    progress_map = {
+        "draft": 10,
+        "planning": 25,
+        "in-progress": 60,
+        "waiting-on-me": 75,
+        "waiting-on-others": 70,
+        "blocked": 45,
+        "done": 100,
+        "failed": 100,
+    }
+    return progress_map.get(_status_slug(status), 20)
+
+
+def _task_progress(task: Optional[Dict[str, Any]]) -> int:
+    if not task:
+        return 0
+    raw_progress = task.get("progress")
+    if isinstance(raw_progress, (int, float)):
+        return max(0, min(100, int(raw_progress)))
+    return _status_progress(str(task.get("status", "Draft")))
+
+
 def _discover_task_files(task_root: str) -> List[str]:
     if not os.path.isdir(task_root):
         return []
@@ -213,6 +287,7 @@ def _normalize_task(task: Dict[str, Any], index: int) -> Dict[str, Any]:
     normalized.setdefault("constraints", {})
     normalized.setdefault("artifacts", [])
     normalized.setdefault("chat", [])
+    normalized.setdefault("latest_result", "")
     return normalized
 
 
@@ -239,7 +314,13 @@ def _find_task(tasks: List[Dict[str, Any]], task_id: Optional[str]) -> Optional[
 def _task_choices(tasks: List[Dict[str, Any]]) -> List[Tuple[str, str]]:
     return [
         (
-            f"{task.get('title', 'Untitled')} · {task.get('status', 'Draft')} · {task.get('priority', 'Medium')}",
+            "\n".join(
+                [
+                    str(task.get("title", "Untitled")),
+                    f"Status: {task.get('status', 'Draft')} | Priority: {task.get('priority', 'Medium')}",
+                    f"Next: {str(task.get('next_action') or 'No next action set')[:90]}",
+                ]
+            ),
             task.get("id", ""),
         )
         for task in tasks
@@ -294,6 +375,7 @@ def _render_inbox(tasks: List[Dict[str, Any]]) -> str:
 def _render_header(task: Optional[Dict[str, Any]]) -> str:
     if not task:
         return '<div class="task-card"><div class="task-empty">Select a task to view details.</div></div>'
+    progress = _task_progress(task)
     return f"""
     <div class="task-card">
       <div class="task-title-row">
@@ -302,6 +384,13 @@ def _render_header(task: Optional[Dict[str, Any]]) -> str:
           <div class="task-meta">{_escape(task.get("goal") or "No goal provided.")}</div>
         </div>
         {_status_badge(task.get("status", "Draft"))}
+      </div>
+      <div class="task-progress-shell">
+        <div class="task-progress-bar" style="width: {progress}%;"></div>
+      </div>
+      <div class="task-progress-meta">
+        <span>Progress: {progress}%</span>
+        <span>Current step: {_escape(task.get("current_step") or "Not set")}</span>
       </div>
       <div class="task-chip-row">
         <span class="task-chip">Priority: {_escape(task.get("priority", "Medium"))}</span>
@@ -367,7 +456,7 @@ def _render_approvals(task: Optional[Dict[str, Any]]) -> str:
     approvals = task.get("approvals", [])
     pending = [approval for approval in approvals if approval.get("status", "pending") == "pending"]
     if not pending:
-        return '<div class="task-card"><h3>Pending Approvals</h3><div class="task-empty">No pending approvals.</div></div>'
+        return '<div class="task-card"><h3>Needs Approval</h3><div class="task-empty">No pending approvals.</div></div>'
     cards = []
     for approval in pending:
         cards.append(
@@ -378,7 +467,7 @@ def _render_approvals(task: Optional[Dict[str, Any]]) -> str:
             </div>
             """
         )
-    return f'<div class="task-card"><h3>Pending Approvals</h3><div class="task-list">{"".join(cards)}</div></div>'
+    return f'<div class="task-card"><h3>Needs Approval</h3><div class="task-list">{"".join(cards)}</div></div>'
 
 
 def _render_next_action(task: Optional[Dict[str, Any]]) -> str:
@@ -428,6 +517,42 @@ def _render_chat(task: Optional[Dict[str, Any]]) -> List[Dict[str, str]]:
     return messages
 
 
+def _render_latest_result(task: Optional[Dict[str, Any]]) -> str:
+    if not task:
+        return '<div class="task-card"><h3>Latest Result</h3><div class="task-empty">No task selected.</div></div>'
+    latest_result = str(task.get("latest_result") or "").strip()
+    if not latest_result:
+        return '<div class="task-card"><h3>Latest Result</h3><div class="task-empty">No run result yet.</div></div>'
+    return f"""
+    <div class="task-card">
+      <h3>Latest Result</h3>
+      <div class="task-list-item-text">{_escape(latest_result)}</div>
+    </div>
+    """
+
+
+def _build_demo_result(task: Dict[str, Any]) -> str:
+    title = str(task.get("title", "Task"))
+    now = datetime.now().astimezone()
+    timestamp = now.strftime("%b %d, %I:%M %p")
+
+    if task.get("id") == "daily-stock-market-summary-5pm":
+        return (
+            f"{timestamp} market wrap: S&P 500 finished slightly higher, Nasdaq outperformed, "
+            "and the Dow was roughly flat. Tech and semiconductors led gains while defensives lagged. "
+            "The main drivers were late-session buying, rate-cut expectations, and a handful of large-cap earnings headlines. "
+            "This is a demo task result for the example workflow."
+        )
+
+    next_action = str(task.get("next_action") or "No next action set.")
+    current_step = str(task.get("current_step") or "No current step.")
+    return (
+        f"{timestamp} task run completed for '{title}'. "
+        f"Current step: {current_step}. Next action: {next_action}. "
+        "This is a demo execution result."
+    )
+
+
 def _dashboard_payload(
     tasks: List[Dict[str, Any]],
     selected_id: Optional[str],
@@ -439,14 +564,9 @@ def _dashboard_payload(
         tasks,
         resolved_id,
         gr.update(choices=_task_choices(tasks), value=resolved_id),
-        _render_inbox(tasks),
         _render_header(task),
-        action_note,
-        _render_current_state(task),
-        _render_timeline(task),
         _render_approvals(task),
-        _render_next_action(task),
-        _render_constraints(task),
+        _render_timeline(task),
         _render_artifacts(task),
         _render_chat(task),
     )
@@ -526,6 +646,21 @@ def _append_chat_message(tasks: List[Dict[str, Any]], task_id: Optional[str], me
     return (*payload, "")
 
 
+def _run_selected_task(tasks: List[Dict[str, Any]], task_id: Optional[str]):
+    tasks = deepcopy(tasks or [])
+    task = _find_task(tasks, task_id)
+    if not task:
+        return _dashboard_payload(tasks, task_id, action_note="No task selected.")
+
+    result = _build_demo_result(task)
+    task["latest_result"] = result
+    task["status"] = "In progress" if _status_slug(str(task.get("status", ""))) not in {"done", "failed"} else task.get("status", "Done")
+    task["current_step"] = "Last run completed"
+    task.setdefault("chat", []).append({"role": "assistant", "content": result})
+    _append_timeline(task, "Task run completed", result)
+    return _dashboard_payload(tasks, task.get("id"), action_note="Task ran successfully.")
+
+
 def build_task_tab(task_root: str) -> None:
     task_file_choices = _task_file_choices(task_root)
     default_task_file = task_file_choices[0][1] if task_file_choices else None
@@ -536,58 +671,38 @@ def build_task_tab(task_root: str) -> None:
         _,
         _selected_task_id,
         initial_selector_update,
-        initial_inbox,
         initial_header,
-        initial_note,
-        initial_state_panel,
-        initial_timeline,
         initial_approvals,
-        initial_next_action,
-        initial_constraints,
+        initial_timeline,
         initial_artifacts,
         initial_chat,
     ) = _dashboard_payload(initial_tasks, initial_selected_id)
 
+    task_file_state = gr.State(default_task_file)
     tasks_state = gr.State(initial_tasks)
     selected_task_state = gr.State(_selected_task_id)
 
-    with gr.Tab("Tasks", elem_id="task-tab", scale=1):
-        with gr.Row(elem_id="task-layout"):
-            with gr.Column(scale=1, min_width=280, elem_id="task-sidebar"):
-                task_file = gr.Dropdown(
-                    choices=task_file_choices,
-                    value=default_task_file,
-                    label="Task data file",
-                )
-                refresh_tasks = gr.Button("Reload Tasks")
-                task_inbox = gr.HTML(initial_inbox)
-                task_selector = gr.Radio(
-                    choices=initial_selector_update.get("choices", []),
-                    value=initial_selector_update.get("value"),
-                    label="Task Inbox",
-                    interactive=True,
-                )
-            with gr.Column(scale=2, min_width=480, elem_id="task-main"):
+    with gr.Row(elem_id="task-layout"):
+        with gr.Column(scale=1, min_width=280, elem_id="task-sidebar"):
+            refresh_tasks = gr.Button("Reload Tasks")
+            task_selector = gr.Radio(
+                choices=initial_selector_update.get("choices", []),
+                value=initial_selector_update.get("value"),
+                label="All Tasks",
+                interactive=True,
+                elem_id="task-selector",
+            )
+        with gr.Column(scale=3, min_width=640, elem_id="task-main"):
+            with gr.Column(elem_classes="task-panel-stack"):
                 task_header = gr.HTML(initial_header)
-                task_action_note = gr.Markdown(initial_note)
+                task_approvals = gr.HTML(initial_approvals)
                 with gr.Row():
+                    run_task = gr.Button("Run Task", variant="primary")
                     pause_task = gr.Button("Pause")
                     cancel_task = gr.Button("Cancel Task")
-                    approve_next = gr.Button("Approve Next Step", variant="primary")
-                task_state_panel = gr.HTML(initial_state_panel)
+                    approve_next = gr.Button("Approve Next Step")
                 task_timeline = gr.HTML(initial_timeline)
                 task_artifacts = gr.HTML(initial_artifacts)
-            with gr.Column(scale=1, min_width=360, elem_id="task-right"):
-                task_approvals = gr.HTML(initial_approvals)
-                task_next_action = gr.HTML(initial_next_action)
-                task_constraints = gr.Code(
-                    label="Constraints / Preferences",
-                    language="json",
-                    lines=14,
-                    max_lines=20,
-                    value=initial_constraints,
-                )
-                save_constraints = gr.Button("Save Constraints")
                 task_chat = gr.Chatbot(label="Task Chat", height=320, value=initial_chat)
                 with gr.Row():
                     task_chat_input = gr.Textbox(
@@ -598,64 +713,54 @@ def build_task_tab(task_root: str) -> None:
                     )
                     task_chat_send = gr.Button("Send", variant="primary")
 
-        dashboard_outputs = [
-            tasks_state,
-            selected_task_state,
-            task_selector,
-            task_inbox,
-            task_header,
-            task_action_note,
-            task_state_panel,
-            task_timeline,
-            task_approvals,
-            task_next_action,
-            task_constraints,
-            task_artifacts,
-            task_chat,
-        ]
+    dashboard_outputs = [
+        tasks_state,
+        selected_task_state,
+        task_selector,
+        task_header,
+        task_approvals,
+        task_timeline,
+        task_artifacts,
+        task_chat,
+    ]
 
-        task_file.change(
-            fn=_load_task_file_for_ui,
-            inputs=task_file,
-            outputs=dashboard_outputs,
-        )
-        refresh_tasks.click(
-            fn=_load_task_file_for_ui,
-            inputs=task_file,
-            outputs=dashboard_outputs,
-        )
-        task_selector.change(
-            fn=_select_task_for_ui,
-            inputs=[task_selector, tasks_state],
-            outputs=dashboard_outputs,
-        )
-        pause_task.click(
-            fn=lambda tasks, task_id: _update_task_status(tasks, task_id, "Blocked", "Paused by user", "Task paused"),
-            inputs=[tasks_state, selected_task_state],
-            outputs=dashboard_outputs,
-        )
-        cancel_task.click(
-            fn=lambda tasks, task_id: _update_task_status(tasks, task_id, "Failed", "Cancelled by user", "Task cancelled"),
-            inputs=[tasks_state, selected_task_state],
-            outputs=dashboard_outputs,
-        )
-        approve_next.click(
-            fn=_approve_selected,
-            inputs=[tasks_state, selected_task_state],
-            outputs=dashboard_outputs,
-        )
-        save_constraints.click(
-            fn=_save_constraints,
-            inputs=[tasks_state, selected_task_state, task_constraints],
-            outputs=dashboard_outputs,
-        )
-        task_chat_send.click(
-            fn=_append_chat_message,
-            inputs=[tasks_state, selected_task_state, task_chat_input],
-            outputs=dashboard_outputs + [task_chat_input],
-        )
-        task_chat_input.submit(
-            fn=_append_chat_message,
-            inputs=[tasks_state, selected_task_state, task_chat_input],
-            outputs=dashboard_outputs + [task_chat_input],
-        )
+    refresh_tasks.click(
+        fn=_load_task_file_for_ui,
+        inputs=task_file_state,
+        outputs=dashboard_outputs,
+    )
+    task_selector.change(
+        fn=_select_task_for_ui,
+        inputs=[task_selector, tasks_state],
+        outputs=dashboard_outputs,
+    )
+    run_task.click(
+        fn=_run_selected_task,
+        inputs=[tasks_state, selected_task_state],
+        outputs=dashboard_outputs,
+    )
+    pause_task.click(
+        fn=lambda tasks, task_id: _update_task_status(tasks, task_id, "Blocked", "Paused by user", "Task paused"),
+        inputs=[tasks_state, selected_task_state],
+        outputs=dashboard_outputs,
+    )
+    cancel_task.click(
+        fn=lambda tasks, task_id: _update_task_status(tasks, task_id, "Failed", "Cancelled by user", "Task cancelled"),
+        inputs=[tasks_state, selected_task_state],
+        outputs=dashboard_outputs,
+    )
+    approve_next.click(
+        fn=_approve_selected,
+        inputs=[tasks_state, selected_task_state],
+        outputs=dashboard_outputs,
+    )
+    task_chat_send.click(
+        fn=_append_chat_message,
+        inputs=[tasks_state, selected_task_state, task_chat_input],
+        outputs=dashboard_outputs + [task_chat_input],
+    )
+    task_chat_input.submit(
+        fn=_append_chat_message,
+        inputs=[tasks_state, selected_task_state, task_chat_input],
+        outputs=dashboard_outputs + [task_chat_input],
+    )

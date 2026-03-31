@@ -1,6 +1,64 @@
 {
   "tasks": [
     {
+      "id": "daily-stock-market-summary-5pm",
+      "title": "Summarize stock market at 5 PM every day",
+      "status": "Planning",
+      "priority": "Medium",
+      "owner": "Agent",
+      "goal": "Prepare a concise daily summary of what happened in the stock market at 5:00 PM each day, including major index moves, notable winners and losers, and the main drivers behind the move.",
+      "deadline": "Every weekday, 5:00 PM",
+      "last_update": "Mar 30, 5:00 PM",
+      "next_action": "Confirm which market scope to cover by default: U.S. broad market only, or U.S. plus major global markets.",
+      "current_step": "Waiting for user preference on market coverage",
+      "why": "A recurring market summary is most useful when the coverage and level of detail match the user's investing workflow.",
+      "risk_level": "Low",
+      "approvals": [
+        {
+          "id": "approval-stock-market-scope",
+          "title": "Use U.S. stock market as the default 5 PM summary scope",
+          "reason": "The task needs a default scope before the recurring summary format can be finalized.",
+          "status": "pending"
+        }
+      ],
+      "constraints": {
+        "schedule": "Every weekday at 5:00 PM local time",
+        "market_scope": "U.S. equities by default unless user expands scope",
+        "include_indexes": [
+          "S&P 500",
+          "Nasdaq",
+          "Dow Jones"
+        ],
+        "include_top_movers": true,
+        "include_macro_drivers": true,
+        "max_length": "short briefing"
+      },
+      "timeline": [
+        {
+          "time": "Mar 30, 5:00 PM",
+          "summary": "Recurring task drafted",
+          "details": "Created a draft workflow for generating a stock market wrap-up at 5 PM each trading day."
+        },
+        {
+          "time": "Mar 30, 4:58 PM",
+          "summary": "Summary format outlined",
+          "details": "Defined the initial template to cover index performance, top movers, and the main market-moving news."
+        }
+      ],
+      "artifacts": [
+        {
+          "name": "daily_market_summary_template.md",
+          "summary": "Draft template for the 5 PM market recap."
+        }
+      ],
+      "chat": [
+        {
+          "role": "assistant",
+          "content": "I drafted a recurring task to summarize the stock market at 5 PM every day. I still need your preferred market scope before locking the default format."
+        }
+      ]
+    },
+    {
       "id": "cancel-xfinity-internet",
       "title": "Cancel Xfinity internet",
       "status": "Waiting on me",

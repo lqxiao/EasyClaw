@@ -158,7 +158,7 @@ if __name__ == "__main__":
         workspace_root = os.path.join(os.getcwd(), "workspace")
         with gr.Tabs():
             with gr.Tab("Chat", elem_id="chat-tab", scale=1):
-                with gr.Sidebar(open=True):
+                with gr.Sidebar(open=False):
                     gr.Markdown(
                         "## Tools\nChoose which tools the agent can use in this chat."
                     )
@@ -245,7 +245,8 @@ if __name__ == "__main__":
                     outputs=[skills_preview_header, skills_preview_code],
                 )
                 open_skills.click(lambda: open_folder(skills_root), None, None)
-            build_task_tab(os.path.join(workspace_root, "TASKS"))
+            with gr.Tab("Tasks", elem_id="task-tab", scale=1):
+                build_task_tab(os.path.join(workspace_root, "TASKS"))
 
         def _preview_user_message(user_text, user_image, claude_messages):
             if not (user_text and user_text.strip()) and user_image is None:
