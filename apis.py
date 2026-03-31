@@ -217,6 +217,11 @@ class LLMBase(ABC):
         except Exception as exc:
             model_id = getattr(self, "model_id", "unknown")
             suffix = " with streaming" if streaming else ""
+            exc_type = type(exc).__name__
+            if exc_type == "LoginRefreshRequired" or "expired" in str(exc).lower() and "login" in str(exc).lower():
+                raise RuntimeError(
+                    f"ERROR: AWS session expired. Run 'aws sso login' or 'aws login' to reauthenticate."
+                ) from exc
             raise RuntimeError(
                 f"ERROR: Can't invoke '{model_id}'{suffix}. Reason: {exc}"
             ) from exc

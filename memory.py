@@ -78,7 +78,7 @@ class S3DatabasePath:
             )
             self._s3_assets_prefix = f"{self._s3_base}/assets"
         else:
-            self._local_root = _normalize_local_path(local_path)
+            self._local_root = _normalize_local_path(local_path) or self.s3_local_cache_path
             os.makedirs(self._local_root, exist_ok=True)
         self._local_db = os.path.join(self._local_root, self.db_filename)
         self._local_assets = os.path.join(self._local_root, "assets")
