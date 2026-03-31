@@ -78,7 +78,7 @@ class S3DatabasePath:
             )
             self._s3_assets_prefix = f"{self._s3_base}/assets"
         else:
-            self._local_root = _normalize_local_path(local_path)
+            self._local_root = _normalize_local_path(local_path) or self.s3_local_cache_path
             os.makedirs(self._local_root, exist_ok=True)
         self._local_db = os.path.join(self._local_root, self.db_filename)
         self._local_assets = os.path.join(self._local_root, "assets")
@@ -116,6 +116,8 @@ class S3DatabasePath:
         self._sync_back()
     
     def _sync_back(self):
+        if not self.on_s3:
+            return
         if os.path.exists(self._local_db):
             target = (
                 f"{self.s3_path}/{self.db_filename}"
@@ -342,9 +344,6 @@ class RagMemoryStore:
         fuzzy: bool = True,
     ) -> List[Dict[str, Any]]:
         if not query:
-            return []
-
-        if len(self.memories) == 0:
             return []
 
         connection = sqlite3.connect(self.db_path)

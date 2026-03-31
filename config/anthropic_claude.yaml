@@ -1,0 +1,6 @@
+anthropic:
+  model_id: claude-sonnet-4-6
+  max_tokens: 128000
+  temperature: 0.5
+agent:
+  max_tool_rounds: 1000

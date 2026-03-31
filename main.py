@@ -1,6 +1,6 @@
 from agent import AutoAgent
 from memory import RagMemoryStore
-from apis import BedrockAPI
+from apis import BedrockAPI, AnthropicAPI, OpenAIAPI
 from apis import call_qwen_image_edition, to_base64
 from skills_browser import load_skill_preview, open_folder
 from task import TASK_UI_CSS, build_task_tab
@@ -120,7 +120,7 @@ def _open_workspace():
 if __name__ == "__main__":
     session_id = str(uuid.uuid4())
     user_id = "admin"
-    s3_memory_path = "path/to/your/s3"
+    s3_memory_path = None  # set to an S3 path like "s3://bucket/path" to use S3 storage
     tool_choices = [
         "exec",
         "memory_profile",
@@ -128,16 +128,25 @@ if __name__ == "__main__":
         "fetch_image",
     ]
 
-    llm = BedrockAPI.from_yaml()
+    _provider_map = {
+        "bedrock":    ("config/bedrock_claude.yaml",   BedrockAPI.from_yaml,   "bedrock"),
+        "anthropic":  ("config/anthropic_claude.yaml", AnthropicAPI.from_yaml, "anthropic"),
+        "openai":     ("config/openai.yaml",           OpenAIAPI.from_yaml,    "openai"),
+    }
+    provider = os.environ.get("LLM_PROVIDER", "bedrock").lower()
+    if provider not in _provider_map:
+        raise ValueError(f"Unknown LLM_PROVIDER '{provider}'. Choose from: {list(_provider_map)}")
+    cfg_path, factory, cfg_key = _provider_map[provider]
+    llm = factory(cfg_path)
     cfg = {}
     try:
-        with open("config/bedrock_claude.yaml", "r", encoding="utf-8") as handle:
+        with open(cfg_path, "r", encoding="utf-8") as handle:
             cfg = yaml.safe_load(handle) or {}
     except FileNotFoundError:
         cfg = {}
     agent_cfg = cfg.get("agent", {}) if isinstance(cfg, dict) else {}
     max_tool_rounds = int(agent_cfg.get("max_tool_rounds", 20))
-    memory = RagMemoryStore(s3_path=s3_memory_path, force_sync=True)
+    memory = RagMemoryStore(s3_path=s3_memory_path, force_sync=False)
     agent = AutoAgent(
         llm=llm,
         memory=memory, 
