@@ -8,6 +8,7 @@ import gradio as gr
 import os
 import uuid
 import yaml
+from PIL import Image as PILImage
 
 ui_css = """
 :root {
@@ -117,10 +118,27 @@ def _open_workspace():
         except Exception as exc:
             return f"Failed to open Finder: {exc}"
 
+
+def _extract_multimodal_input(payload):
+        if not isinstance(payload, dict):
+            return "", None
+        text = str(payload.get("text", "") or "")
+        files = payload.get("files") or []
+        if not isinstance(files, list) or not files:
+            return text, None
+        first_file = files[0]
+        if not isinstance(first_file, str) or not first_file:
+            return text, None
+        try:
+            with PILImage.open(first_file) as img:
+                return text, img.copy()
+        except Exception:
+            return text, None
+
 if __name__ == "__main__":
     session_id = str(uuid.uuid4())
     user_id = "admin"
-    s3_memory_path = None  # set to an S3 path like "s3://bucket/path" to use S3 storage
+    s3_memory_path = "s3://shopqa-users/liqiangx/tmp/memory_database"  # set to an S3 path like "s3://bucket/path" to use S3 storage
     tool_choices = [
         "exec",
         "memory_profile",
@@ -184,23 +202,19 @@ if __name__ == "__main__":
                         pending_image = gr.State(None)
                     with gr.Column(elem_id="chat-composer"):
                         with gr.Row(elem_id="chat-input-row"):
-                            msg = gr.Textbox(
+                            msg = gr.MultimodalTextbox(
                                 show_label=False,
                                 placeholder="Ask something...",
                                 lines=3,
+                                max_lines=6,
+                                sources=["upload"],
+                                file_types=["image"],
+                                file_count="single",
+                                submit_btn=True,
+                                stop_btn=True,
                                 scale=4,
                                 container=False,
                             )
-                            image_input = gr.Image(
-                                type="pil",
-                                label="Image (optional)",
-                                height=80,
-                                scale=1,
-                                show_label=False,
-                                sources=["clipboard", "upload"],
-                            )
-                            send = gr.Button("Send", variant="primary", elem_id="send-button")
-                            stop = gr.Button("Stop", variant="stop", visible=False)
             with gr.Tab("Workspace", scale=1):
                 gr.Markdown("## Workspace")
                 workspace_explorer = gr.FileExplorer(
@@ -248,12 +262,13 @@ if __name__ == "__main__":
             with gr.Tab("Tasks", elem_id="task-tab", scale=1):
                 build_task_tab(os.path.join(workspace_root, "TASKS"))
 
-        def _preview_user_message(user_text, user_image, claude_messages):
+        def _preview_user_message(user_payload, claude_messages):
+            user_text, user_image = _extract_multimodal_input(user_payload)
             if not (user_text and user_text.strip()) and user_image is None:
                 return (
                     agent.to_gradio_messages(claude_messages),
                     claude_messages,
-                    "",
+                    None,
                     "",
                     None,
                 )
@@ -262,7 +277,7 @@ if __name__ == "__main__":
             return (
                 agent.to_gradio_messages(claude_messages),
                 claude_messages,
-                "",
+                None,
                 user_text,
                 user_image,
             )
@@ -272,7 +287,6 @@ if __name__ == "__main__":
                 yield (
                     agent.to_gradio_messages(claude_messages),
                     claude_messages,
-                    "",
                     None,
                     "",
                     None,
@@ -289,7 +303,6 @@ if __name__ == "__main__":
                     yield (
                         agent.to_gradio_messages(current_history),
                         current_history,
-                        "",
                         None,
                         "",
                         None,
@@ -305,75 +318,26 @@ if __name__ == "__main__":
                 yield (
                     agent.to_gradio_messages(claude_messages),
                     claude_messages,
-                    "",
                     None,
                     "",
                     None,
                 )
 
-        def _show_stop_button():
-            return (
-                gr.update(visible=False),
-                gr.update(visible=True),
-            )
-
-        def _show_send_button():
-            return (
-                gr.update(visible=True),
-                gr.update(visible=False),
-            )
-
-        send_preview_event = send.click(
-            _preview_user_message,
-            [msg, image_input, claude_state],
-            [chatbot, claude_state, msg, pending_text, pending_image],
-        )
-        send_toggle_event = send_preview_event.then(
-            _show_stop_button,
-            None,
-            [send, stop],
-            queue=False,
-        )
-        send_response_event = send_toggle_event.then(
-            _gradio_handler,
-            [pending_text, pending_image, claude_state, enabled_tools],
-            [chatbot, claude_state, msg, image_input, pending_text, pending_image],
-        )
-        send_response_event.then(
-            _show_send_button,
-            None,
-            [send, stop],
-            queue=False,
-        )
-
         submit_preview_event = msg.submit(
             _preview_user_message,
-            [msg, image_input, claude_state],
+            [msg, claude_state],
             [chatbot, claude_state, msg, pending_text, pending_image],
         )
-        submit_toggle_event = submit_preview_event.then(
-            _show_stop_button,
-            None,
-            [send, stop],
-            queue=False,
-        )
-        submit_response_event = submit_toggle_event.then(
+        submit_response_event = submit_preview_event.then(
             _gradio_handler,
             [pending_text, pending_image, claude_state, enabled_tools],
-            [chatbot, claude_state, msg, image_input, pending_text, pending_image],
+            [chatbot, claude_state, msg, pending_text, pending_image],
         )
-        submit_response_event.then(
-            _show_send_button,
+        msg.stop(
+            lambda: None,
             None,
-            [send, stop],
-            queue=False,
-        )
-
-        stop.click(
-            _show_send_button,
             None,
-            [send, stop],
-            cancels=[send_response_event, submit_response_event],
+            cancels=[submit_response_event],
             queue=False,
         )
 

@@ -11,6 +11,15 @@ from urllib.request import Request, urlopen
 from PIL import Image
 
 _BASE64_RE = re.compile(r"^[A-Za-z0-9+/=\s]+$")
+_PIL_FORMAT_TO_MIME = {
+    "JPEG": "image/jpeg",
+    "JPG": "image/jpeg",
+    "PNG": "image/png",
+    "WEBP": "image/webp",
+    "GIF": "image/gif",
+    "BMP": "image/bmp",
+    "TIFF": "image/tiff",
+}
 
 
 def compose_system_prompt(
@@ -62,6 +71,13 @@ def to_base64(
         raise ValueError("src must be a non-empty string")
     s = src.strip()
 
+    def infer_mime_from_bytes(data: bytes, fallback: str) -> str:
+        try:
+            with Image.open(BytesIO(data)) as img:
+                return _PIL_FORMAT_TO_MIME.get((img.format or "").upper(), fallback)
+        except Exception:
+            return fallback
+
     def wrap(b64: str, mime: str) -> str:
         b64 = b64.strip()
         return f"data:{mime};base64,{b64}" if return_data_url else b64
@@ -71,7 +87,9 @@ def to_base64(
         if ";base64," not in s.lower():
             raise ValueError("Only base64-encoded data URLs are supported (must contain ';base64,').")
         header, b64 = s.split(",", 1)
-        mime = header.split(";")[0][5:] or default_mime
+        header_mime = header.split(";")[0][5:] or default_mime
+        raw = base64.b64decode(b64)
+        mime = infer_mime_from_bytes(raw, header_mime)
         return wrap(b64, mime)
 
     # Case 2: http(s) URL -> download -> base64 encode
@@ -80,7 +98,7 @@ def to_base64(
         with urlopen(req, timeout=timeout) as resp:
             data = resp.read()
             content_type = resp.headers.get("Content-Type", "").split(";")[0].strip()
-        mime = content_type or default_mime
+        mime = infer_mime_from_bytes(data, content_type or default_mime)
         b64 = base64.b64encode(data).decode("utf-8")
         return wrap(b64, mime)
 
@@ -89,12 +107,15 @@ def to_base64(
     if p.exists() and p.is_file():
         data = p.read_bytes()
         b64 = base64.b64encode(data).decode("utf-8")
-        mime = mimetypes.guess_type(p.name)[0] or default_mime
+        guessed_mime = mimetypes.guess_type(p.name)[0] or default_mime
+        mime = infer_mime_from_bytes(data, guessed_mime)
         return wrap(b64, mime=mime)
 
     # Case 4: raw base64 -> accept as-is (best-effort validation)
     if _BASE64_RE.match(s) and len(s) % 4 == 0:
-        return wrap(s, default_mime)
+        raw = base64.b64decode(s)
+        mime = infer_mime_from_bytes(raw, default_mime)
+        return wrap(s, mime)
 
     raise ValueError("Input image must be a data URL, http(s) URL, local file path, or raw base64.")
 

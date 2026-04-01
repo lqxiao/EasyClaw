@@ -3,4 +3,4 @@ anthropic:
   max_tokens: 128000
   temperature: 0.5
 agent:
-  max_tool_rounds: 1000
+  max_tool_rounds: 10000
