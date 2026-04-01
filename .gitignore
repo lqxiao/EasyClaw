@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 .DS_Store
 workspace/MISSIONS/
+workspace/SKILLS/qwen_image_edit_batch
