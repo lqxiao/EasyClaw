@@ -1,0 +1,4 @@
+max_tool_rounds: 10000
+user_id: admin
+s3_memory_path: None # put your s3 path here if any
+tool_choices: ["exec", "memory_profile", "memory_history_retrieve", "fetch_image"]

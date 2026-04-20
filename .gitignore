@@ -4,3 +4,6 @@ __pycache__/
 .DS_Store
 workspace/MISSIONS/
 workspace/SKILLS/qwen_image_edit_batch
+workspace/SKILLS/llm_judge/
+test.ipynb
+dist/

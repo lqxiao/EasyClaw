@@ -1,0 +1,29 @@
+{
+    "id": "summarize-slack-starred-chats",
+    "title": "Summarize Slack starred chats",
+    "status": "pending",
+    "priority": "High",
+    "owner": "Agent",
+    "goal": "Review starred Slack channels and direct messages, summarize what is happening, and list what the user needs to do next.",
+    "period": "every weekday 5:00pm",
+    "last_execution_timestamp": "",
+    "next_execution_timestamp": "2026-04-01T17:00:00-07:00",
+    "next_action": "Open Slack in the browser, review all starred chats, and produce a summary plus TODOs for the user.",
+    "current_step": "Ready to run",
+    "risk_level": "Low",
+    "approvals": [],
+    "constraints": {
+    "mode": "read-only",
+    "use_skill": "browser_use",
+    "do_not_send_messages": true,
+    "do_not_modify_slack": true,
+    "stop_if_login_required": true
+    },
+    "history": [
+    {
+        "timestamp": "2026-04-01T17:00:00-07:00",
+        "result": "Your starred Slack workspace at Amazon is centered around the **SFAI (Shopping Foundation AI)** team, specifically the **post-training, alignment, and Rufus** workstreams. The past week has been focused on **infrastructure transitions** (Greenland → EKS migration by 04/30, EOL model deprecation), **seating consolidation** in Seattle/Cricket office, **RL training infrastructure** (StormRL, SLIME, GRS), and ongoing **multimodal/benchmark work** with Xin Liu. There are several action items requiring your attention, including a survey deadline, model migration requirements, and a follow-up with Swati Sachdeva on annotation UI."
+    }
+    ]
+}
+

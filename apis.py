@@ -874,3 +874,248 @@ def call_qwen_image():
 
 def call_wan():
     NotImplementedError
+
+
+# ---------------------------------------------------------------------------
+# OpenAI Codex (Responses API)
+# ---------------------------------------------------------------------------
+
+def _messages_to_responses_input(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Convert Anthropic-format messages to OpenAI Responses API input items."""
+    items: List[Dict[str, Any]] = []
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+
+        if role == "system":
+            continue  # handled via 'instructions' parameter
+
+        if isinstance(content, str):
+            items.append({
+                "type": "message",
+                "role": "user" if role == "user" else "assistant",
+                "content": [{"type": "input_text", "text": content}]
+                          if role == "user"
+                          else [{"type": "output_text", "text": content}],
+            })
+            continue
+
+        tool_uses = [b for b in content if b.get("type") == "tool_use"]
+        tool_results = [b for b in content if b.get("type") == "tool_result"]
+        text_blocks = [b for b in content if b.get("type") == "text"]
+        image_blocks = [b for b in content if b.get("type") == "image"]
+
+        if tool_results:
+            for tr in tool_results:
+                tr_content = tr.get("content", [])
+                text = (
+                    "".join(c.get("text", "") for c in tr_content
+                            if isinstance(c, dict) and c.get("type") == "text")
+                    if isinstance(tr_content, list) else str(tr_content)
+                )
+                items.append({
+                    "type": "function_call_output",
+                    "call_id": tr.get("tool_use_id", ""),
+                    "output": text,
+                })
+        elif tool_uses:
+            if text_blocks:
+                text = "".join(b.get("text", "") for b in text_blocks)
+                if text:
+                    items.append({
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "output_text", "text": text}],
+                    })
+            for tc in tool_uses:
+                items.append({
+                    "type": "function_call",
+                    "name": tc.get("name", ""),
+                    "arguments": json.dumps(tc.get("input", {})),
+                    "call_id": tc.get("id", ""),
+                })
+        else:
+            parts: List[Dict[str, Any]] = []
+            for b in text_blocks:
+                if role == "user":
+                    parts.append({"type": "input_text", "text": b.get("text", "")})
+                else:
+                    parts.append({"type": "output_text", "text": b.get("text", "")})
+            for b in image_blocks:
+                src = b.get("source", {})
+                if src.get("type") == "base64":
+                    data_url = f"data:{src.get('media_type', 'image/png')};base64,{src.get('data', '')}"
+                    parts.append({"type": "input_image", "image_url": data_url})
+            if parts:
+                items.append({
+                    "type": "message",
+                    "role": "user" if role == "user" else "assistant",
+                    "content": parts,
+                })
+
+    return items
+
+
+def _responses_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Convert Anthropic tool schemas to Responses API function tool format."""
+    return [
+        {
+            "type": "function",
+            "name": tool["name"],
+            "description": tool.get("description", ""),
+            "parameters": _patch_array_items(tool.get("input_schema", {})),
+        }
+        for tool in tools
+    ]
+
+
+def _responses_output_to_anthropic(response) -> Dict[str, Any]:
+    """Convert a Responses API Response object to Anthropic response format."""
+    content: List[Dict[str, Any]] = []
+    has_tool_use = False
+    for item in response.output:
+        if item.type == "message":
+            for part in item.content:
+                if hasattr(part, "text"):
+                    content.append({"type": "text", "text": part.text})
+        elif item.type == "function_call":
+            has_tool_use = True
+            try:
+                input_data = json.loads(item.arguments)
+            except (json.JSONDecodeError, TypeError):
+                input_data = {}
+            content.append({
+                "type": "tool_use",
+                "id": item.call_id,
+                "name": item.name,
+                "input": input_data,
+            })
+    stop_reason = "tool_use" if has_tool_use else "end_turn"
+    return {"role": "assistant", "content": content, "stop_reason": stop_reason}
+
+
+class CodexAPI(LLMBase):
+    """OpenAI Codex via the Responses API."""
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model_id: str = "codex-mini-latest",
+        max_tokens: int = 128000,
+        temperature: Optional[float] = None,
+    ):
+        import openai as _openai
+        self.model_id = model_id
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self._client = _openai.OpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY"))
+
+    @staticmethod
+    def from_yaml(path: str = "config/openai.yaml") -> "CodexAPI":
+        cfg = _load_yaml(path)
+        o = cfg.get("codex", {})
+        return CodexAPI(
+            model_id=o.get("model_id", "codex-mini-latest"),
+            max_tokens=int(o.get("max_tokens", 128000)),
+        )
+
+    def send_messages(
+        self,
+        messages: Union[str, List[Dict[str, Any]]],
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        messages, tools = self._prepare(messages, tools)
+        system_text, non_system = self._split_system(messages)
+        input_items = _messages_to_responses_input(non_system)
+
+        kwargs: Dict[str, Any] = {
+            "model": self.model_id,
+            "input": input_items,
+            "max_output_tokens": max_tokens or self.max_tokens,
+        }
+        if system_text:
+            kwargs["instructions"] = system_text
+        if self.temperature is not None:
+            kwargs["temperature"] = temperature if temperature is not None else self.temperature
+        if tools:
+            kwargs["tools"] = _responses_tools(tools)
+            kwargs["tool_choice"] = "auto"
+
+        with self._api_call():
+            response = self._client.responses.create(**kwargs)
+        return _responses_output_to_anthropic(response)
+
+    def send_messages_stream(
+        self,
+        messages: Union[str, List[Dict[str, Any]]],
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        messages, tools = self._prepare(messages, tools)
+        system_text, non_system = self._split_system(messages)
+        input_items = _messages_to_responses_input(non_system)
+
+        kwargs: Dict[str, Any] = {
+            "model": self.model_id,
+            "input": input_items,
+            "max_output_tokens": max_tokens or self.max_tokens,
+            "stream": True,
+        }
+        if system_text:
+            kwargs["instructions"] = system_text
+        if self.temperature is not None:
+            kwargs["temperature"] = temperature if temperature is not None else self.temperature
+        if tools:
+            kwargs["tools"] = _responses_tools(tools)
+            kwargs["tool_choice"] = "auto"
+
+        accumulated_text = ""
+        tool_calls: List[Dict[str, Any]] = []
+        stop_reason: Optional[str] = None
+
+        def _snapshot() -> Dict[str, Any]:
+            content: List[Dict[str, Any]] = []
+            if accumulated_text:
+                content.append({"type": "text", "text": accumulated_text})
+            for tc in tool_calls:
+                content.append(tc)
+            return {"role": "assistant", "content": content, "stop_reason": stop_reason}
+
+        with self._api_call(streaming=True):
+            stream = self._client.responses.create(**kwargs)
+
+        for event in stream:
+            if event.type == "response.output_text.delta":
+                accumulated_text += event.delta
+                yield _snapshot()
+            elif event.type == "response.output_item.done":
+                item = event.item
+                if item.type == "function_call":
+                    try:
+                        input_data = json.loads(item.arguments)
+                    except (json.JSONDecodeError, TypeError):
+                        input_data = {}
+                    tool_calls.append({
+                        "type": "tool_use",
+                        "id": item.call_id,
+                        "name": item.name,
+                        "input": input_data,
+                    })
+                    stop_reason = "tool_use"
+                    yield _snapshot()
+            elif event.type == "response.completed":
+                if stop_reason is None:
+                    stop_reason = "end_turn"
+
+        yield _snapshot()
+
+
+_provider_map = {
+        "bedrock":    ("config/bedrock_claude.yaml",   BedrockAPI.from_yaml,   "bedrock"),
+        "anthropic":  ("config/anthropic_claude.yaml", AnthropicAPI.from_yaml, "anthropic"),
+        "openai":     ("config/openai.yaml",           OpenAIAPI.from_yaml,    "openai"),
+        "codex":      ("config/openai.yaml",           CodexAPI.from_yaml,     "codex"),
+    }

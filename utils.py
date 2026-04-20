@@ -60,6 +60,7 @@ def to_base64(
     user_agent: str = "Mozilla/5.0",
     return_data_url: bool = True,
     default_mime: str = "image/png",
+    max_image_size: Optional[int] = None,
 ) -> str:
     """
     Input: http(s) URL, local file path, data URL, or raw base64.
@@ -71,12 +72,23 @@ def to_base64(
         raise ValueError("src must be a non-empty string")
     s = src.strip()
 
-    def infer_mime_from_bytes(data: bytes, fallback: str) -> str:
+    def normalize_image_bytes(data: bytes, fallback: str) -> tuple[bytes, str]:
         try:
             with Image.open(BytesIO(data)) as img:
-                return _PIL_FORMAT_TO_MIME.get((img.format or "").upper(), fallback)
+                image_format = (img.format or "").upper()
+                mime = _PIL_FORMAT_TO_MIME.get(image_format, fallback)
+                if not max_image_size or max(img.size) <= max_image_size:
+                    return data, mime
+
+                resized = resize_image_max(img, max_size=max_image_size)
+                save_format = image_format or "PNG"
+                if save_format in {"JPEG", "JPG"} and resized.mode not in {"RGB", "L"}:
+                    resized = resized.convert("RGB")
+                buf = BytesIO()
+                resized.save(buf, format=save_format)
+                return buf.getvalue(), mime
         except Exception:
-            return fallback
+            return data, fallback
 
     def wrap(b64: str, mime: str) -> str:
         b64 = b64.strip()
@@ -89,7 +101,8 @@ def to_base64(
         header, b64 = s.split(",", 1)
         header_mime = header.split(";")[0][5:] or default_mime
         raw = base64.b64decode(b64)
-        mime = infer_mime_from_bytes(raw, header_mime)
+        raw, mime = normalize_image_bytes(raw, header_mime)
+        b64 = base64.b64encode(raw).decode("utf-8")
         return wrap(b64, mime)
 
     # Case 2: http(s) URL -> download -> base64 encode
@@ -98,7 +111,7 @@ def to_base64(
         with urlopen(req, timeout=timeout) as resp:
             data = resp.read()
             content_type = resp.headers.get("Content-Type", "").split(";")[0].strip()
-        mime = infer_mime_from_bytes(data, content_type or default_mime)
+        data, mime = normalize_image_bytes(data, content_type or default_mime)
         b64 = base64.b64encode(data).decode("utf-8")
         return wrap(b64, mime)
 
@@ -106,16 +119,17 @@ def to_base64(
     p = Path(s)
     if p.exists() and p.is_file():
         data = p.read_bytes()
-        b64 = base64.b64encode(data).decode("utf-8")
         guessed_mime = mimetypes.guess_type(p.name)[0] or default_mime
-        mime = infer_mime_from_bytes(data, guessed_mime)
+        data, mime = normalize_image_bytes(data, guessed_mime)
+        b64 = base64.b64encode(data).decode("utf-8")
         return wrap(b64, mime=mime)
 
     # Case 4: raw base64 -> accept as-is (best-effort validation)
     if _BASE64_RE.match(s) and len(s) % 4 == 0:
         raw = base64.b64decode(s)
-        mime = infer_mime_from_bytes(raw, default_mime)
-        return wrap(s, mime)
+        raw, mime = normalize_image_bytes(raw, default_mime)
+        b64 = base64.b64encode(raw).decode("utf-8")
+        return wrap(b64, mime)
 
     raise ValueError("Input image must be a data URL, http(s) URL, local file path, or raw base64.")
 

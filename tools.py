@@ -245,6 +245,10 @@ class ImageBase64Tool:
             timeout = int(tool_input.get("timeout", 30))
         except (TypeError, ValueError):
             return error_result("ERROR: image_base64 timeout must be an integer.")
+        try:
+            max_image_size = int(tool_input.get("max_image_size", 1024))
+        except (TypeError, ValueError):
+            return error_result("ERROR: image_base64 max_image_size must be an integer.")
 
         content = []
         try:
@@ -255,6 +259,7 @@ class ImageBase64Tool:
                     user_agent=user_agent,
                     return_data_url=True,
                     default_mime=default_mime,
+                    max_image_size=max_image_size,
                 )
                 header, b64 = result.split(",", 1)
                 mime = header.split(";")[0][5:] or default_mime

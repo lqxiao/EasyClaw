@@ -14,10 +14,10 @@ import json
 class AutoAgent: 
     '''A dialog flow and interface to user'''
     def __init__(self, llm, memory, session_id, user_id, max_tool_rounds: int = 20):
-        if llm: 
+        if llm is not None: 
             self.llm = llm
-        else: 
-            ValueError("llm could not be empty")
+        else:
+            self.llm = None  # Will be set later via sidebar
         self.memory = memory
         self.session_id = session_id
         self.user_id = user_id
@@ -53,7 +53,7 @@ class AutoAgent:
         self,
         enabled_tools: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
-        if not hasattr(self.llm, "_default_tools"):
+        if self.llm is None or not hasattr(self.llm, "_default_tools"):
             return []
         tool_schemas = self.llm._default_tools()
         allowed = set(self._build_tool_runners(enabled_tools).keys())

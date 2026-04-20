@@ -3,5 +3,3 @@ openai:
   max_tokens: 128000
   temperature: 0.5
   disable_temperature: true  # gpt-5-nano does not support temperature
-agent:
-  max_tool_rounds: 1000

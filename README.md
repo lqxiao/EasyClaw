@@ -4,33 +4,26 @@ EasyClaw is a more user-friendly open-source agent system inspired by OpenClaw, 
 
 It launches a local Gradio web UI where you can chat with the agent, browse the `workspace/` folder, and inspect enabled skills.
 
-## Supported LLM Providers
-
-EasyClaw supports three providers out of the box. Pick the one you have access to:
-
-| Provider | Config file | Env var needed |
-|----------|-------------|----------------|
-| Amazon Bedrock (default) | `config/bedrock_claude.yaml` | AWS credentials |
-| Anthropic direct API | `config/anthropic_claude.yaml` | `ANTHROPIC_API_KEY` |
-| OpenAI | `config/openai.yaml` | `OPENAI_API_KEY` |
-
-Select a provider by setting `LLM_PROVIDER` before running:
-
-```bash
-LLM_PROVIDER=anthropic python main.py   # Anthropic direct
-LLM_PROVIDER=openai python main.py      # OpenAI
-python main.py                          # defaults to Bedrock
+# Quick Start 
+## For Non-Tech 
+1. Download this repo to your computer.
+2. Open Terminal.
+3. Anthorize the APP
+```bash 
+xattr -cr /path/to/EASYCLAW 
+chmod +x /path/to/EASYCLAW
 ```
+4. Double-Click EASYCLAW/dist/EASYCLAW icon. 
+5. Once APP opened, chose your API provider in navbar and input key.
 
-Each config file lets you set `model_id`, `max_tokens`, `temperature`, and `agent.max_tool_rounds`.
-
-## Requirements
+## For Developer
+### Requirements
 
 - Python 3.10 or newer
 - Credentials for your chosen provider (see table above)
 - [Optional] Access to an S3 bucket for cloud-backed memory storage — defaults to local at `~/.cache/cute_ai/memory/`
 
-## Install
+### Install
 
 1. Open a terminal in this project folder:
 
@@ -78,7 +71,7 @@ export ANTHROPIC_API_KEY=your_key
 export OPENAI_API_KEY=your_key
 ```
 
-## Configure
+### Configure
 
 Each provider has its own config file under `config/`:
 
@@ -88,7 +81,7 @@ Each provider has its own config file under `config/`:
 
 Memory storage defaults to local (`~/.cache/cute_ai/memory/memory.db`). To use S3, set `s3_memory_path` in `main.py` to your S3 path (e.g. `s3://my-bucket/memory`) — the agent will sync to S3 on exit.
 
-## Open The App
+### Open The App
 
 ```bash
 python main.py
@@ -100,30 +93,33 @@ Gradio will print a local URL in the terminal. Open that URL in your browser. It
 http://127.0.0.1:7860
 ```
 
-## What You Should See
+### What You Should See
 
 - `Chat` tab for talking to the agent
 - `Workspace` tab for browsing files under `workspace/`
 - `Skills` tab for previewing skill files
 - `Tasks` tab for viewing and managing agent tasks
 
-## Adding a New Provider
+### Supported LLM Providers
 
-1. Create a subclass of `LLMBase` in `apis.py`
-2. Implement `send_messages` and `send_messages_stream` — use `self._prepare()`, `self._split_system()`, and `self._api_call()` from the base class
-3. Add a `from_yaml()` static method and a config file under `config/`
-4. Register it in the `_provider_map` in `main.py`
+EasyClaw supports three providers out of the box. Pick the one you have access to:
 
-## Updating Dependencies
+| Provider | Config file | Env var needed |
+|----------|-------------|----------------|
+| Amazon Bedrock (default) | `config/bedrock_claude.yaml` | AWS credentials |
+| Anthropic direct API | `config/anthropic_claude.yaml` | `ANTHROPIC_API_KEY` |
+| OpenAI | `config/openai.yaml` | `OPENAI_API_KEY` |
 
-`requirements.txt` contains direct dependencies with loose version bounds. `requirements.lock` is the fully pinned lockfile used for installs.
-
-To add or upgrade a dependency, edit `requirements.txt` then regenerate the lockfile:
+Select a provider by setting `LLM_PROVIDER` before running:
 
 ```bash
-uv pip compile requirements.txt -o requirements.lock
-uv pip sync requirements.lock
+LLM_PROVIDER=anthropic python main.py   # Anthropic direct
+LLM_PROVIDER=openai python main.py      # OpenAI
+python main.py                          # defaults to Bedrock
 ```
+
+Each config file lets you set `model_id`, `max_tokens`, `temperature`, and `agent.max_tool_rounds`.
+
 
 ## Troubleshooting
 
