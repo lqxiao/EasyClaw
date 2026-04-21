@@ -4,6 +4,9 @@ EasyClaw is a more user-friendly open-source agent system inspired by OpenClaw, 
 
 It launches a local Gradio web UI where you can chat with the agent, browse the `workspace/` folder, and inspect enabled skills.
 
+![APP UI]( ./app_ui.png "Optional title")
+
+
 # Quick Start 
 ## For Non-Tech 
 1. Download this repo to your computer.
